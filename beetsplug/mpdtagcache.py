@@ -33,9 +33,16 @@ class MPDTagCache(BeetsPlugin):
         self.config.add({'multiple_genre_delimiter': ','})
         self.config.add({'supported_audio_filetypes': ['.flac', '.mp3', '.mp4', '.ogg', '.ape', '.alac']})
 
-        self.mpd_music_directory = normpath(config['directory'].as_filename())
-        self.supported_audio_filetypes = tuple(self.config['supported_audio_filetypes'].as_str_seq())
-        self.mpd_tagcache_file = normpath(self.config['tagcache_file'].as_filename())
+        # Storing the config values this way saved 20s of execution time!
+        # It may also have to do with removing the type assertions from the
+        # ``get()`` calls.
+        self.mpd_mtime = self.config['mtime'].get()
+        self.multiple_genres = self.config['multiple_genres'].get()
+        self.multiple_genre_delimiter = self.config['multiple_genre_delimiter'].get()
+
+        self.mpd_music_directory = normpath(config['directory'].get())
+        self.supported_audio_filetypes = tuple(self.config['supported_audio_filetypes'].get())
+        self.mpd_tagcache_file = normpath(self.config['tagcache_file'].get())
 
     def fetch_beets_db(self, lib):
         cache = dict()  # NOTE: ``OrderedDict`` worked, but the order of
@@ -116,7 +123,7 @@ class MPDTagCache(BeetsPlugin):
         directory_block = str()
         directory_relpath = directory.path.split(self.mpd_music_directory+os.path.sep)[1]
         directory_block = ("directory: {}\n".format(directory.name) +
-                           "mtime: {:d}\n".format(self.config['mtime'].get(int))   +
+                           "mtime: {:d}\n".format(self.mpd_mtime)   +
                            "begin: {}\n".format(directory_relpath))
         for dir_entry in scandir_sorted(directory.path):
             if dir_entry.is_dir():
@@ -132,8 +139,8 @@ class MPDTagCache(BeetsPlugin):
 
 
     def generate_song_block(self, song):
-        if self.config['multiple_genres'].get(bool) is True:
-            genres = filter(None, song['genre'].split(self.config['multiple_genre_delimiter'].get()))
+        if self.multiple_genres is True:
+            genres = filter(None, song['genre'].split(self.multiple_genre_delimiter))
             genre_lines = str()
             for genre in genres:
                 genre_lines += "Genre: {0}\n".format(genre.strip())
@@ -153,7 +160,7 @@ class MPDTagCache(BeetsPlugin):
                       "Disc: {:2d}\n".format(song['disc'])                  +
                       "Composer: {}\n".format(song['composer'])             +
                       "Performer: {}\n".format(song['arranger'])            +
-                      "mtime: {:d}\n".format(self.config['mtime'].get(int)) +
+                      "mtime: {:d}\n".format(self.mpd_mtime)                +
                       "song_end\n")
         return song_block
 
