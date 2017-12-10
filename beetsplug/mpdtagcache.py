@@ -7,22 +7,32 @@ from beets import ui
 import sqlite3
 import os
 import time
+import operator
 
 start_time = time.time()
 
+
+# Utilities.
+def normpath(path):
+    return util.normpath(path).decode('utf8')
+
+def scandir_sorted(path):
+    return sorted(os.scandir(path), key=operator.attrgetter('path')) 
+    # TODO: Sadly, this way it is no longer a
+    # generator, but it is an okay solution.
+
+
+# Plugin class.
 class MPDTagCache(BeetsPlugin):
     def __init__(self):
         super(MPDTagCache, self).__init__()  # Avoid using ``super()`` to be
                                              # compatible with Python 2.
-        self.mpd_music_directory = self.normpath(config['directory'].get())
+        self.mpd_music_directory = normpath(config['directory'].get())
         self.mpd_mtime = config['mpdtagcache']['mtime'].get()
         self.multiple_genres = config['mpdtagcache']['multiple_genres'].get()
         self.multiple_genre_delimiter = config['mpdtagcache']['multiple_genre_delimiter'].get()
         self.supported_audio_filetypes = tuple(config['mpdtagcache']['supported_audio_filetypes'].get())
-        self.mpd_tagcache_file = self.normpath(config['mpdtagcache']['tagcache_file'].get())
-
-    def normpath(self, path):
-        return util.normpath(path).decode('utf8')
+        self.mpd_tagcache_file = normpath(config['mpdtagcache']['tagcache_file'].get())
 
 
     def fetch_beets_db(self, lib):
@@ -87,7 +97,7 @@ class MPDTagCache(BeetsPlugin):
                 "tag: MUSICBRAINZ_RELEASETRACKID\n"
                 "info_end\n")
         contents = str()
-        for dir_entry in os.scandir(self.mpd_music_directory):
+        for dir_entry in scandir_sorted(self.mpd_music_directory):
             assert os.path.isdir(dir_entry.path), ("There are non-directory "
                                                   "files in the music library "
                                                   "directory. Please clean up.")
@@ -106,7 +116,7 @@ class MPDTagCache(BeetsPlugin):
         directory_block = ("directory: {}\n".format(directory.name) +
                            "mtime: {:d}\n".format(self.mpd_mtime)   +
                            "begin: {}\n".format(directory_relpath))
-        for dir_entry in os.scandir(directory.path):
+        for dir_entry in scandir_sorted(directory.path):
             if dir_entry.is_dir():
                 directory_block += self.generate_directory_blocks(dir_entry)
             elif dir_entry.path.lower().endswith(self.supported_audio_filetypes):
