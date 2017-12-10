@@ -27,13 +27,15 @@ class MPDTagCache(BeetsPlugin):
     def __init__(self):
         super(MPDTagCache, self).__init__()  # Avoid using ``super()`` to be
                                              # compatible with Python 2.
-        self.mpd_music_directory = normpath(config['directory'].get())
-        self.mpd_mtime = config['mpdtagcache']['mtime'].get()
-        self.multiple_genres = config['mpdtagcache']['multiple_genres'].get()
-        self.multiple_genre_delimiter = config['mpdtagcache']['multiple_genre_delimiter'].get()
-        self.supported_audio_filetypes = tuple(config['mpdtagcache']['supported_audio_filetypes'].get())
-        self.mpd_tagcache_file = normpath(config['mpdtagcache']['tagcache_file'].get())
+        # Some default config values.
+        self.config.add({'mtime': 0})
+        self.config.add({'multiple_genres': False})
+        self.config.add({'multiple_genre_delimiter': ','})
+        self.config.add({'supported_audio_filetypes': ['.flac', '.mp3', '.mp4', '.ogg', '.ape', '.alac']})
 
+        self.mpd_music_directory = normpath(config['directory'].as_filename())
+        self.supported_audio_filetypes = tuple(self.config['supported_audio_filetypes'].as_str_seq())
+        self.mpd_tagcache_file = normpath(self.config['tagcache_file'].as_filename())
 
     def fetch_beets_db(self, lib):
         cache = dict()  # NOTE: ``OrderedDict`` worked, but the order of
@@ -114,7 +116,7 @@ class MPDTagCache(BeetsPlugin):
         directory_block = str()
         directory_relpath = directory.path.split(self.mpd_music_directory+os.path.sep)[1]
         directory_block = ("directory: {}\n".format(directory.name) +
-                           "mtime: {:d}\n".format(self.mpd_mtime)   +
+                           "mtime: {:d}\n".format(self.config['mtime'].get(int))   +
                            "begin: {}\n".format(directory_relpath))
         for dir_entry in scandir_sorted(directory.path):
             if dir_entry.is_dir():
@@ -130,8 +132,8 @@ class MPDTagCache(BeetsPlugin):
 
 
     def generate_song_block(self, song):
-        if self.multiple_genres:
-            genres = filter(None, song['genre'].split(self.multiple_genre_delimiter))
+        if self.config['multiple_genres'].get(bool) is True:
+            genres = filter(None, song['genre'].split(self.config['multiple_genre_delimiter'].get()))
             genre_lines = str()
             for genre in genres:
                 genre_lines += "Genre: {0}\n".format(genre.strip())
@@ -139,19 +141,19 @@ class MPDTagCache(BeetsPlugin):
             if not genre_lines:
                 genre_lines += "Genre: "
         song_filename = os.path.basename(song['path'].decode('utf8'))
-        song_block = ("song_begin: {}\n".format(song_filename)        +
-                      "Time: {:.6f}\n".format(song['length'])         +
-                      "Artist: {}\n".format(song['artist'])           +
-                      "Album: {}\n".format(song['album'])             +
-                      "AlbumArtist: {}\n".format(song['albumartist']) +
-                      "Title: {}\n".format(song['title'])             +
-                      "Track: {:02d}\n".format(song['track'])         +
-                      "{}\n".format(genre_lines)                      +
-                      "Date: {:4d}\n".format(song['year'])            +
-                      "Disc: {:2d}\n".format(song['disc'])            +
-                      "Composer: {}\n".format(song['composer'])       +
-                      "Performer: {}\n".format(song['arranger'])      +
-                      "mtime: {:d}\n".format(self.mpd_mtime)          +
+        song_block = ("song_begin: {}\n".format(song_filename)              +
+                      "Time: {:.6f}\n".format(song['length'])               +
+                      "Artist: {}\n".format(song['artist'])                 +
+                      "Album: {}\n".format(song['album'])                   +
+                      "AlbumArtist: {}\n".format(song['albumartist'])       +
+                      "Title: {}\n".format(song['title'])                   +
+                      "Track: {:02d}\n".format(song['track'])               +
+                      "{}\n".format(genre_lines)                            +
+                      "Date: {:4d}\n".format(song['year'])                  +
+                      "Disc: {:2d}\n".format(song['disc'])                  +
+                      "Composer: {}\n".format(song['composer'])             +
+                      "Performer: {}\n".format(song['arranger'])            +
+                      "mtime: {:d}\n".format(self.config['mtime'].get(int)) +
                       "song_end\n")
         return song_block
 
