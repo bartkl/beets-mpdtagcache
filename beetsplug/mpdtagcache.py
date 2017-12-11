@@ -8,8 +8,10 @@ import sqlite3
 import os
 import time
 import operator
+import shutil
+import tempfile
 
-start_time = time.time()
+execution_start_time = time.time()
 
 
 # Utilities.
@@ -44,6 +46,7 @@ class MPDTagCache(BeetsPlugin):
         self.supported_audio_filetypes = tuple(self.config['supported_audio_filetypes'].get())
         self.mpd_tagcache_file = normpath(self.config['tagcache_file'].get())
 
+
     def fetch_beets_db(self, lib):
         cache = dict()  # NOTE: ``OrderedDict`` worked, but the order of
                         # writing to the tag cache file is determined by
@@ -68,16 +71,29 @@ class MPDTagCache(BeetsPlugin):
                 left join albums
                 on items.album_id = albums.id
             """)
+            self._log.debug("Fetching all items from beets database ...")
+            start_time = time.time()
+
             for row in cur:
                 cache[row['path']] = row
             cur.close()
+            end_time = time.time()
+            self._log.debug("Done fetching in {:.6f} seconds.".format(end_time - start_time))
 
             return cache
 
 
     def write_tag_cache_to_file(self):
-        with open(self.mpd_tagcache_file, "w") as f:
-            f.write(self.generate_tag_cache())
+        start_time = time.time()
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as tmp_file:
+            self._log.debug("Writing to temporary file: {} ...".format(tmp_file.name))
+            tmp_file.write(self.generate_tag_cache())
+        end_time = time.time()
+        self._log.debug("Done writing in {:.6f} seconds.".format(end_time - start_time))
+        self._log.debug("Copying temporary file to MPD tag cache at {} ...".format(self.mpd_tagcache_file))
+        shutil.copyfile(tmp_file.name, self.mpd_tagcache_file)
+        self._log.debug("Deleting temporary file ...".format(tmp_file.name))
+        os.unlink(tmp_file.name)
 
 
     def generate_tag_cache(self):
@@ -167,11 +183,11 @@ class MPDTagCache(BeetsPlugin):
 
     def generate_mpd_tagcache(self, lib, opts, args):
         self.beets_db_cache = self.fetch_beets_db(lib)
-        self._log.info("Writing MPD tag cache to {} ...".format(self.mpd_tagcache_file))
+        self._log.info("Generating MPD tag cache file to {} ...".format(self.mpd_tagcache_file))
         self.write_tag_cache_to_file()
-        end_time = time.time()
-        self._log.info(("\nDone.\n"
-              "Execution took {:.6f} seconds.").format(end_time - start_time))
+        execution_end_time = time.time()
+        self._log.info("Finished.")
+        self._log.debug("Execution took {:.6f} seconds.".format(execution_end_time - execution_start_time))
 
     def commands(self):
         mpdtagcache_cmd = ui.Subcommand('mpdtagcache', help='generate mpd tagcache')
